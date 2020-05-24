@@ -6,7 +6,7 @@
   "scripts": {
     "test": "mocha src/test --timeout 10000",
     "start": "if-env NODE_ENV=production ?? npm run start:prod || npm run start:dev",
-    "start:dev": "nodemon server.js .env.dev",
+    "start:dev": "node server.js .env.dev",
     "start:prod": "node server.js .env.prod",
     "dev": "nodemon server.js .env"
   },
