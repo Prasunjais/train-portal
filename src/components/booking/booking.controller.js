@@ -162,7 +162,7 @@ class userController extends BaseController {
   // get
   get = async (req, res) => {
     try {
-      info('Get all the locations of the battle !');
+      info('Get all the bookings of the battle !');
       let limit = parseInt(req.query.limit || 20),
         skip = parseInt(req.query.skip || 0),
         trainId = req.query.trainId || '',
