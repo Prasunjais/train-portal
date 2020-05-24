@@ -2,5 +2,6 @@ module.exports = {
   create: 'Stop Created Successfully !',
   invalidStopId: 'Invalid Stop Id !',
   updateNotAllowed: 'Nothing to Update !',
-  patch: 'Stop Updated successfully !'
+  patch: 'Stop Updated successfully !',
+  stopFetchedSuccessfully: 'Stop Fetched Successfully !'
 };

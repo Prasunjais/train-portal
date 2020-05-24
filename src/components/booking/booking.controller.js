@@ -1,5 +1,6 @@
 const BaseController = require('../baseController');
-const Model = require('./models/stop.model');
+const PassengerCtrl = require('../passenger/passenger.controller');
+const Model = require('./models/booking.model');
 const mongoose = require('mongoose');
 const _ = require('lodash');
 const {
@@ -12,23 +13,29 @@ class userController extends BaseController {
   // constructor 
   constructor() {
     super();
-    this.messageTypes = this.messageTypes.stops;
+    this.messageTypes = this.messageTypes.booking;
   }
 
   // do something 
   create = async (req, res) => {
     try {
-      info('running the controller');
+      info('Create a new Booking !');
+      let passengerList = req.body.passenger
+      let passengers = await PassengerCtrl.create(passengerList);
+      let passengerIds = passengers.success ? passengers.data.map((data) => { return { 'passenger': data._id } }) : []
+      let insertObject = {
+        trainId: req.body.trainId,
+        passengerIds: passengerIds
+      }
 
-      let stopCreated = await Model.create({
-        stopInitial: req.body.initial,
-        name: req.body.name || '',
-        description: req.body.description || ''
+      // booking created 
+      let bookingDone = await Model.create({
+        ...insertObject
       });
 
       const resp = {
         status: 200,
-        data: stopCreated
+        data: bookingDone
       };
 
       // success response 
@@ -42,16 +49,16 @@ class userController extends BaseController {
   }
 
   // check whether the stop id valid 
-  isValidStop = async (stopId) => {
+  isValidTrain = async (trainId) => {
     try {
       info('Is Valid Stop');
       let ObjectId = mongoose.Types.ObjectId;
-      let stopCreated = {};
+      let isValidTrain = {};
 
       // is valid stop ids 
-      if (ObjectId.isValid(stopId))
-        stopCreated = await Model.findOne({
-          _id: mongoose.Types.ObjectId(stopId),
+      if (ObjectId.isValid(trainId))
+        isValidTrain = await Model.findOne({
+          _id: mongoose.Types.ObjectId(trainId),
           status: true
         }).lean();
       else
@@ -60,9 +67,9 @@ class userController extends BaseController {
         };
 
       // if stop not created 
-      if (!_.isEmpty(stopCreated)) return {
+      if (!_.isEmpty(isValidTrain)) return {
         success: true,
-        data: stopCreated
+        data: isValidTrain
       };
       else return {
         success: false,
@@ -82,7 +89,7 @@ class userController extends BaseController {
   patch = async (req, res) => {
     try {
       let dataToPatch = {},
-        stopId = req.params.stopId,
+        trainId = req.params.trainId,
         isUpdated = {};
 
       // initializing data to update
@@ -90,19 +97,51 @@ class userController extends BaseController {
         ...dataToPatch,
         name: req.body.name || ''
       }
-      if (req.body.description) dataToPatch = {
+      if (req.body.number) dataToPatch = {
         ...dataToPatch,
-        description: req.body.description || ''
-      }
-      if (req.body.initial) dataToPatch = {
-        ...dataToPatch,
-        stopInitial: req.body.initial || ''
+        number: req.body.number || ''
       }
 
       // check whether the data to update contains data
       if (dataToPatch && !_.isEmpty(dataToPatch)) {
         await Model.update({
-          '_id': mongoose.Types.ObjectId(stopId)
+          '_id': mongoose.Types.ObjectId(trainId)
+        }, {
+          $set: dataToPatch
+        }).lean().catch((error) => {
+          error(error);
+          throw new Error('error');
+        });
+      } else return this.errors(req, res, this.status.HTTP_METHOD_NOT_ALLOWED, this.messageTypes.updateNotAllowed);
+
+      // success response 
+      return this.success(req, res, this.status.HTTP_OK, dataToPatch, this.messageTypes.patch);
+
+      // catch any runtime error 
+    } catch (e) {
+      error(e);
+      this.errors(req, res, this.status.HTTP_INTERNAL_SERVER_ERROR, this.exceptions.internalServerErr(req, err));
+    }
+  }
+
+  patchStatus = async (req, res) => {
+    try {
+      let dataToPatch = {},
+        trainId = req.params.trainId,
+        isUpdated = {};
+
+      // initializing data to update
+      if (req.params.type == 'activate') dataToPatch = {
+        status: true
+      }
+      if (req.params.type == 'de-activate') dataToPatch = {
+        status: false
+      }
+
+      // check whether the data to update contains data
+      if (dataToPatch && !_.isEmpty(dataToPatch)) {
+        await Model.update({
+          '_id': mongoose.Types.ObjectId(trainId)
         }, {
           $set: dataToPatch
         }).lean().catch((error) => {
@@ -126,38 +165,38 @@ class userController extends BaseController {
       info('Get all the locations of the battle !');
       let limit = parseInt(req.query.limit || 20),
         skip = parseInt(req.query.skip || 0),
-        search = req.query.search || '';
+        trainId = req.query.trainId || '',
+        bookingId = req.query.bookingId || '',
+        trainSearchObj = {},
+        bookingSearchObj = {};
 
       // fields to project
       let fieldsToSelectObject = {
-        'name': 1,
-        'description': 1,
-        'stopInitial': 1,
+        'trainId': 1,
+        'passengerIds': 1,
+        'status': 1
       };
 
       let searchObject = {};
 
-      // king name 
-      if (search) searchObject = {
-        ...searchObject,
-        '$or': [{
-          'name': {
-            $regex: req.query.search,
-            $options: 'is'
-          }
-        }, {
-          'description': {
-            $regex: req.query.search,
-            $options: 'is'
-          }
-        }, {
-          'stopInitial': {
-            $regex: req.query.search,
-            $options: 'is'
-          }
-        }]
+      // source stop name 
+      if (trainId) trainSearchObj = {
+        'trainId': mongoose.Types.ObjectId(req.query.trainId),
       }
 
+      // destination stop name 
+      if (bookingId) bookingSearchObj = {
+        '_id': mongoose.Types.ObjectId(req.query.bookingId),
+      }
+      // console.log('The data hrie ---> ', trainSearchObj,
+      // bookingSearchObj);
+      // search object 
+      searchObject = {
+        ...trainSearchObj,
+        ...bookingSearchObj,
+        'status': true
+      }
+      // console.log('The ibjhec there si---> ', searchObject);
       // get all the locations 
       let stops = await Model.aggregate([
         {
@@ -170,7 +209,15 @@ class userController extends BaseController {
           '$skip': skip
         }, {
           '$limit': limit
-        }]).allowDiskUse(true);
+        }, {
+          '$lookup': {
+            'from': 'passengers',
+            'localField': 'passengerIds.passenger',
+            'foreignField': '_id',
+            'as': 'passenger'
+          }
+        }
+      ]).allowDiskUse(true);
 
       // success response 
       return this.success(req, res, this.status.HTTP_OK,
